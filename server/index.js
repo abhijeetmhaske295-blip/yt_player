@@ -17,9 +17,11 @@ async function getInnertube() {
   if (ytInitPromise) return ytInitPromise;
 
   ytInitPromise = (async () => {
-    console.log('[Innertube] Initializing client...');
+    console.log('[Innertube] Initializing client with ANDROID client_type...');
     try {
-      ytInstance = await Innertube.create();
+      ytInstance = await Innertube.create({
+        client_type: 'ANDROID',
+      });
       console.log('[Innertube] Initialized successfully');
       return ytInstance;
     } catch (err) {
@@ -119,52 +121,78 @@ app.get('/api/stream/:id', async (req, res) => {
 
   try {
     const yt = await getInnertube();
-    const info = await yt.getBasicInfo(id);
 
-    // Resolve best audio format with fallback
+    // Query stream info with client fallback (IOS provides unthrottled direct format.url; ANDROID fallback)
+    let info = null;
     let format = null;
-    try {
-      format = info.chooseFormat({ type: 'audio', quality: 'best' });
-    } catch (e) {
-      console.warn(`[Format Notice] quality:best selection failed for ${id}, attempting fallback:`, e.message);
+
+    for (const client of ['IOS', 'ANDROID']) {
+      try {
+        const candidateInfo = await yt.getBasicInfo(id, { client });
+        let candidateFormat = null;
+        try {
+          candidateFormat = candidateInfo.chooseFormat({ type: 'audio', quality: 'best' });
+        } catch {
+          const adaptive = candidateInfo.streaming_data?.adaptive_formats?.filter((f) => f.has_audio);
+          candidateFormat = adaptive?.[0] || candidateInfo.chooseFormat({ type: 'audio' });
+        }
+
+        if (candidateFormat && (candidateFormat.url || candidateFormat.signature_cipher)) {
+          info = candidateInfo;
+          format = candidateFormat;
+          break;
+        }
+
+        if (!format && candidateFormat) {
+          info = candidateInfo;
+          format = candidateFormat;
+        }
+      } catch (clientErr) {
+        console.warn(`[Client ${client} notice for ${id}]:`, clientErr.message);
+      }
     }
 
-    if (!format) {
-      const adaptiveAudio = info.streaming_data?.adaptive_formats?.filter((f) => f.has_audio);
-      if (adaptiveAudio && adaptiveAudio.length > 0) {
-        format = adaptiveAudio[0];
-      } else {
-        format = info.chooseFormat({ type: 'audio' });
-      }
+    if (!format && !info) {
+      info = await yt.getBasicInfo(id);
+      format = info.chooseFormat({ type: 'audio', quality: 'best' });
     }
 
     if (!format) {
       return res.status(404).json({ error: 'No compatible audio format found' });
     }
 
-    // Decipher stream URL
-    let decipheredUrl = format.url;
-    if (!decipheredUrl && typeof format.decipher === 'function') {
-      decipheredUrl = await format.decipher(yt.session.player);
+    // Resolve direct or deciphered stream URL
+    let streamUrl = format.url;
+    if (!streamUrl && typeof format.decipher === 'function') {
+      try {
+        streamUrl = await format.decipher(yt.session.player);
+      } catch (decErr) {
+        console.warn(`[Decipher notice for ${id}]:`, decErr.message);
+      }
     }
 
-    if (!decipheredUrl) {
-      return res.status(500).json({ error: 'Failed to decipher stream URL' });
+    if (!streamUrl) {
+      return res.status(500).json({ error: 'Failed to resolve stream URL' });
     }
 
+    // Setup headers with Android User-Agent and Range header
     const rangeHeader = req.headers.range;
     const upstreamHeaders = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
     };
 
     if (rangeHeader) {
       upstreamHeaders.Range = rangeHeader;
     }
 
-    const response = await fetch(decipheredUrl, {
+    const response = await fetch(streamUrl, {
       headers: upstreamHeaders,
     });
+
+    // Log upstream status code if not 200/206
+    if (response.status !== 200 && response.status !== 206) {
+      console.warn(`[Upstream Audio Warning for ${id}] Status: ${response.status} ${response.statusText}`);
+    }
 
     res.status(response.status);
 
@@ -185,7 +213,7 @@ app.get('/api/stream/:id', async (req, res) => {
 
     res.setHeader('Accept-Ranges', 'bytes');
     if (!res.getHeader('content-type')) {
-      res.setHeader('Content-Type', format.mime_type || 'audio/webm');
+      res.setHeader('Content-Type', format.mime_type || 'audio/mp4');
     }
 
     const bodyStream = Readable.fromWeb(response.body);

@@ -21,8 +21,8 @@ import {
   Shuffle,
   Repeat,
   Repeat1,
+  Disc3,
 } from 'lucide-react';
-import WarpCarousel, { type WarpCard } from '@/components/ui/warp-carousel';
 
 export interface Track {
   id: string;
@@ -151,16 +151,19 @@ export default function App() {
   };
 
   // Play Track & set queue
-  const playTrack = useCallback((track: Track, queue?: Track[]) => {
-    setCurrentTrack(track);
-    if (queue) {
-      setCurrentQueue(queue);
-    } else if (searchResults.length > 0) {
-      setCurrentQueue(searchResults);
-    }
-    setIsPlaying(true);
-    setCurrentTime(0);
-  }, [searchResults]);
+  const playTrack = useCallback(
+    (track: Track, queue?: Track[]) => {
+      setCurrentTrack(track);
+      if (queue) {
+        setCurrentQueue(queue);
+      } else if (searchResults.length > 0) {
+        setCurrentQueue(searchResults);
+      }
+      setIsPlaying(true);
+      setCurrentTime(0);
+    },
+    [searchResults]
+  );
 
   // Toggle Play / Pause
   const togglePlay = () => {
@@ -250,7 +253,7 @@ export default function App() {
     }
 
     navigator.mediaSession.setActionHandler('play', () => {
-      audioRef.current?.play();
+      audioRef.current?.play().catch(console.error);
       setIsPlaying(true);
     });
     navigator.mediaSession.setActionHandler('pause', () => {
@@ -484,120 +487,12 @@ export default function App() {
     );
   };
 
-  // Telemetry Metrics for WarpCarousel
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const totalSavedTracks = playlists.reduce((acc, p) => acc + p.tracks.length, 0);
-  const streamBitrate = currentTrack ? '160' : '0';
-
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs < 0) return '0:00';
     const mins = Math.floor(secs / 60);
     const rem = Math.floor(secs % 60);
     return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
   };
-
-  // Dynamic Telemetry Cards passed directly to WarpCarousel
-  const telemetryCards: WarpCard[] = useMemo(
-    () => [
-      {
-        title: 'Track progress\nplayback',
-        value: String(Math.round(progressPercent)),
-        unit: '%',
-        footer: currentTrack
-          ? isPlaying
-            ? 'Streaming live'
-            : 'Playback paused'
-          : 'Standby / no track',
-        detail: 'slider',
-        labels: ['0%', '100%'],
-        numeral: ['#38bdf8', '#bae6fd'],
-        accent: '#38bdf8',
-        glow: '#0284c7',
-        mesh: [
-          '#022852', '#031e3f', '#031934', '#021831', '#021b36', '#022246',
-          '#022345', '#020e1e', '#01040f', '#000416', '#020b31', '#021c57',
-          '#01172f', '#01010c', '#03001d', '#0a0f4c', '#112383', '#0b36af',
-          '#021142', '#050b47', '#0c2e8f', '#165bd4', '#1675fd', '#167bff',
-          '#03288e', '#0438af', '#0d66e7', '#107eec', '#30afff', '#71dcff',
-          '#0356e8', '#0259ec', '#0945b0', '#001a49', '#3f7c9d', '#d4ffff',
-          '#0365ff', '#0256ea', '#052a87', '#00001f', '#1f4c7b', '#9ee7ff',
-        ],
-      },
-      {
-        title: 'Synced lyrics\nlines',
-        value: String(activeLyricIndex >= 0 ? activeLyricIndex + 1 : lyrics.length),
-        unit: lyrics.length > 0 ? `/${lyrics.length}` : '',
-        footer: isLyricsLoading
-          ? 'Fetching LRCLIB...'
-          : lyrics.length > 0
-          ? 'LRCLIB real-time sync'
-          : 'No lyrics active',
-        detail: 'wave',
-        numeral: ['#c084fc', '#f3e8ff'],
-        accent: '#c084fc',
-        glow: '#9333ea',
-        mesh: [
-          '#4c2d5f', '#3b2245', '#3e285b', '#33204f', '#381844', '#572571',
-          '#644096', '#4f3688', '#8358f6', '#8d54f3', '#5e20ac', '#6e24b7',
-          '#482e6d', '#261b48', '#825bf6', '#d48cff', '#d07bff', '#b359ff',
-          '#2d1837', '#140a1b', '#2c1d66', '#3a2383', '#693bca', '#8b42ef',
-          '#411c5b', '#300753', '#3b006e', '#500f79', '#7e31c1', '#9541f3',
-          '#44245a', '#3f0c69', '#6f15b9', '#d17cff', '#e2a3ff', '#a668ff',
-          '#4b2f60', '#4d2172', '#6819aa', '#9b48dc', '#965dc9', '#7745c4',
-        ],
-      },
-      {
-        title: 'Saved library\ntracks',
-        value: String(totalSavedTracks),
-        unit: ' trk',
-        footer: `${playlists.length} playlists stored`,
-        detail: 'ring',
-        numeral: ['#4ade80', '#dcfce7'],
-        accent: '#4ade80',
-        glow: '#16a34a',
-        mesh: [
-          '#064e3b', '#065f46', '#047857', '#059669', '#10b981', '#34d399',
-          '#022c22', '#064e3b', '#065f46', '#047857', '#059669', '#10b981',
-          '#064e3b', '#065f46', '#047857', '#059669', '#10b981', '#34d399',
-          '#022c22', '#064e3b', '#065f46', '#047857', '#059669', '#10b981',
-          '#064e3b', '#065f46', '#047857', '#059669', '#10b981', '#34d399',
-          '#022c22', '#064e3b', '#065f46', '#047857', '#059669', '#10b981',
-          '#064e3b', '#065f46', '#047857', '#059669', '#10b981', '#34d399',
-        ],
-      },
-      {
-        title: 'Audio stream\nbitrate',
-        value: streamBitrate,
-        unit: ' kbps',
-        footer: currentTrack ? 'Opus 48kHz HD stream' : 'Standby',
-        detail: 'cross',
-        labels: ['Live', 'Opus', 'HQ'],
-        numeral: ['#fbbf24', '#fef3c7'],
-        accent: '#fbbf24',
-        glow: '#d97706',
-        mesh: [
-          '#451a03', '#78350f', '#92400e', '#b45309', '#d97706', '#f59e0b',
-          '#291102', '#451a03', '#78350f', '#92400e', '#b45309', '#d97706',
-          '#451a03', '#78350f', '#92400e', '#b45309', '#d97706', '#f59e0b',
-          '#291102', '#451a03', '#78350f', '#92400e', '#b45309', '#d97706',
-          '#451a03', '#78350f', '#92400e', '#b45309', '#d97706', '#f59e0b',
-          '#291102', '#451a03', '#78350f', '#92400e', '#b45309', '#d97706',
-          '#451a03', '#78350f', '#92400e', '#b45309', '#d97706', '#f59e0b',
-        ],
-      },
-    ],
-    [
-      progressPercent,
-      currentTrack,
-      isPlaying,
-      activeLyricIndex,
-      lyrics.length,
-      isLyricsLoading,
-      totalSavedTracks,
-      playlists.length,
-      streamBitrate,
-    ]
-  );
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0a0a0e] text-white overflow-hidden select-none">
@@ -685,19 +580,93 @@ export default function App() {
 
       {/* Main Split Container */}
       <main className="flex-1 flex overflow-hidden p-6 gap-6 min-h-0">
-        {/* Left Slot: WarpCarousel WebGL Visual */}
-        <section className="flex-1 flex flex-col min-w-0 bg-zinc-950/40 rounded-2xl border border-zinc-800/60 p-2 overflow-hidden shadow-2xl relative">
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800 text-xs font-medium text-zinc-300 backdrop-blur-sm pointer-events-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-            <span>Telemetry Visualizer</span>
-          </div>
-          <div className="flex-1 w-full h-full">
-            <WarpCarousel
-              cards={telemetryCards}
-              autoplay={true}
-              interval={4.5}
-              background="transparent"
+        {/* Left Slot: Now Playing Album Poster View (Metrolist / Apple Music style) */}
+        <section className="relative flex-1 flex flex-col items-center justify-center min-w-0 bg-zinc-950/60 rounded-3xl border border-zinc-800/60 overflow-hidden shadow-2xl p-6 select-none">
+          {/* Full-bleed blurred ambient backdrop */}
+          {currentTrack?.thumbnail && (
+            <div
+              className="absolute inset-0 bg-cover bg-center filter blur-3xl scale-150 opacity-25 pointer-events-none transition-all duration-1000 ease-out"
+              style={{ backgroundImage: `url(${currentTrack.thumbnail})` }}
             />
+          )}
+          {/* Dark glass gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0e] via-zinc-950/70 to-zinc-950/30 pointer-events-none" />
+
+          {/* Centered Poster & Telemetry Info */}
+          <div className="relative z-10 flex flex-col items-center max-w-sm md:max-w-md w-full text-center my-auto">
+            {/* Album Cover Poster with Ambient Glow */}
+            <div className="relative group mb-8">
+              {currentTrack?.thumbnail && (
+                <div
+                  className="absolute -inset-4 bg-cover bg-center rounded-3xl filter blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-700 pointer-events-none"
+                  style={{ backgroundImage: `url(${currentTrack.thumbnail})` }}
+                />
+              )}
+
+              <div className="relative h-64 w-64 md:h-80 md:w-80 rounded-2xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.85)] border border-white/10 bg-zinc-900/90 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-[1.02]">
+                {currentTrack?.thumbnail ? (
+                  <img
+                    src={currentTrack.thumbnail}
+                    alt={currentTrack.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-zinc-600 gap-4 p-8">
+                    <div className="h-24 w-24 rounded-full border-2 border-dashed border-zinc-700/80 flex items-center justify-center bg-zinc-800/40">
+                      <Disc3 className="h-12 w-12 text-zinc-500 animate-spin-slow" />
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-500 tracking-wider uppercase">
+                      No Track Selected
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Song title and artist */}
+            <div className="w-full px-4 mb-5">
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white truncate drop-shadow-md">
+                {currentTrack?.title || 'WARP // MUSIC'}
+              </h1>
+              <p className="text-sm md:text-base font-medium text-zinc-400 truncate mt-1.5">
+                {currentTrack?.artist || 'Discover & stream your favorite music'}
+              </p>
+            </div>
+
+            {/* Pill badges with live status */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-zinc-900/90 border border-zinc-800/80 text-zinc-300 backdrop-blur-md shadow-sm">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isPlaying ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
+                  }`}
+                />
+                <span>{currentTrack ? 'Opus Audio • 160 kbps' : 'Standby'}</span>
+              </span>
+
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-zinc-900/90 border border-zinc-800/80 text-zinc-300 backdrop-blur-md shadow-sm">
+                <Mic2 className="h-3 w-3 text-purple-400" />
+                <span>
+                  {isLyricsLoading
+                    ? 'Fetching LRCLIB...'
+                    : lyrics.length > 0
+                    ? `${lyrics.length} Synced Lines`
+                    : 'No Lyrics'}
+                </span>
+              </span>
+
+              {/* Active lyric line preview */}
+              {currentTrack && activeLyricIndex >= 0 && lyrics[activeLyricIndex] && (
+                <div
+                  onClick={() => setActiveTab('lyrics')}
+                  className="w-full mt-3 px-4 py-2.5 rounded-xl bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/40 backdrop-blur-md text-xs font-medium text-purple-200 truncate cursor-pointer transition-colors shadow-inner flex items-center justify-center gap-2"
+                  title="Click to open synced lyrics tab"
+                >
+                  <span className="text-purple-400">♪</span>
+                  <span className="italic truncate">{lyrics[activeLyricIndex].text}</span>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
