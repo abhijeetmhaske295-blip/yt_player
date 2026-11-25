@@ -76,7 +76,10 @@ export default function App() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch (err) {
       console.error('Failed to parse playlists from localStorage:', err);
@@ -226,19 +229,25 @@ export default function App() {
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: currentTrack.artist,
-      album: 'YouTube Music',
-      artwork: currentTrack.thumbnail
-        ? [
-            { src: currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '256x256', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
-          ]
-        : [],
-    });
+    try {
+      const artwork = [];
+      if (currentTrack.thumbnail && currentTrack.thumbnail.startsWith('http')) {
+        artwork.push(
+          { src: currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }
+        );
+      }
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || 'Unknown Title',
+        artist: currentTrack.artist || 'Unknown Artist',
+        album: 'YouTube Music',
+        artwork,
+      });
+    } catch (err) {
+      console.warn('Failed to set MediaMetadata:', err);
+    }
 
     navigator.mediaSession.setActionHandler('play', () => {
       audioRef.current?.play();

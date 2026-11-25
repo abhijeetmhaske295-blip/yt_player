@@ -1404,7 +1404,7 @@ export function WarpCarousel({
     >
       <canvas ref={canvasRef} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
       <div aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>
-        {front ? `${front.title.replace("\n", " ")}: ${front.value}${front.unit || ""}. ${front.footer || ""}` : ""}
+        {front ? `${(front.title || "").replace("\n", " ")}: ${front.value || ""}${front.unit || ""}. ${front.footer || ""}` : ""}
       </div>
     </div>
   );
